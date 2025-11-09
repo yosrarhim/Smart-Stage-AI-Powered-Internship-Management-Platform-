@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeoniStage</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+    h1, h2 { color: #2c3e50; }
+    .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    textarea, input[type=text], select { width: 100%; padding: 10px; margin: 5px 0; }
+    button { padding: 10px 15px; margin: 5px 0; background: #2980b9; color: white; border: none; cursor: pointer; border-radius: 4px; }
+    button:hover { background: #3498db; }
+    .task { display: flex; align-items: center; justify-content: space-between; margin: 5px 0; }
+    .task.done span { text-decoration: line-through; color: gray; }
+    .priority-haute { color: red; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>LeoniStage</h1>
+
+  <section id="dashboard">
+    <h2>Dashboard</h2>
+    <div id="userInfo"></div>
+    <div id="stageDay"></div>
+    <div id="taskSummary"></div>
+  </section>
+
+  <hr>
+
+  <section id="tasks">
+    <h2>Gestion des Tâches</h2>
+    <input type="text" id="taskText" placeholder="Nouvelle tâche">
+    <select id="taskPriority">
+      <option value="basse">Basse</option>
+      <option value="moyenne">Moyenne</option>
+      <option value="haute">Haute</option>
+    </select>
+    <button onclick="addTask()">Ajouter</button>
+    <div id="taskList"></div>
+  </section>
+
+  <hr>
+
+  <section id="journal">
+    <h2>Journal de Bord</h2>
+    <textarea id="journalEntry" rows="5"></textarea>
+    <button onclick="saveJournal()">Sauvegarder</button>
+  </section>
+
+  <hr>
+
+  <section id="rapport">
+    <h2>Rapport Hebdomadaire</h2>
+    <button onclick="generateReport()">Générer</button>
+    <textarea id="weeklyReport" rows="7"></textarea>
+  </section>
+
+  <hr>
+
+  <section id="powerBI">
+    <h2>Power BI (optionnel)</h2>
+    <iframe src="https://app.powerbi.com/view?r=TON_URL" width="100%" height="400" frameborder="0" allowFullScreen></iframe>
+  </section>
+</div>
+
+<script>
+const defaultUser = { nom: "Yassine", service: "Qualité", encadrant: "Mme Bensalem", startDate: "2025-05-20" };
+
+function loadData() {
+  if (!localStorage.getItem("leoni")) {
+    localStorage.setItem("leoni", JSON.stringify({ user: defaultUser, taches: [], journal: {} }));
+  }
+  return JSON.parse(localStorage.getItem("leoni"));
+}
+
+function saveData(data) {
+  localStorage.setItem("leoni", JSON.stringify(data));
+}
+
+function updateDashboard(data) {
+  const { nom, service, encadrant, startDate } = data.user;
+  document.getElementById("userInfo").innerText = `Nom: ${nom} | Service: ${service} | Encadrant: ${encadrant}`;
+  const today = new Date();
+  const start = new Date(startDate);
+  const dayDiff = Math.floor((today - start) / (1000 * 3600 * 24)) + 1;
+  const week = Math.ceil(dayDiff / 7);
+  const day = dayDiff % 7 || 7;
+  document.getElementById("stageDay").innerText = `Semaine ${week} - Jour ${day}`;
+  document.getElementById("taskSummary").innerText = `${data.taches.filter(t => !t.fait).length} tâches à faire, ${data.taches.filter(t => t.fait).length} terminées.`;
+}
+
+function renderTasks(data) {
+  const taskList = document.getElementById("taskList");
+  taskList.innerHTML = "";
+  data.taches.forEach(task => {
+    const div = document.createElement("div");
+    div.className = `task ${task.fait ? 'done' : ''}`;
+    div.innerHTML = `
+      <span class="priority-${task.priorite}">${task.texte}</span>
+      <div>
+        <button onclick="toggleTask(${task.id})">${task.fait ? 'Annuler' : 'Fait'}</button>
+        <button onclick="deleteTask(${task.id})">Supprimer</button>
+      </div>`;
+    taskList.appendChild(div);
+  });
+}
+
+function addTask() {
+  const data = loadData();
+  const texte = document.getElementById("taskText").value;
+  const priorite = document.getElementById("taskPriority").value;
+  if (texte) {
+    data.taches.push({ id: Date.now(), texte, fait: false, priorite });
+    saveData(data);
+    renderTasks(data);
+    updateDashboard(data);
+  }
+}
+
+function toggleTask(id) {
+  const data = loadData();
+  const task = data.taches.find(t => t.id === id);
+  task.fait = !task.fait;
+  saveData(data);
+  renderTasks(data);
+  updateDashboard(data);
+}
+
+function deleteTask(id) {
+  const data = loadData();
+  data.taches = data.taches.filter(t => t.id !== id);
+  saveData(data);
+  renderTasks(data);
+  updateDashboard(data);
+}
+
+function saveJournal() {
+  const data = loadData();
+  const today = new Date().toISOString().split('T')[0];
+  const content = document.getElementById("journalEntry").value;
+  data.journal[today] = content;
+  saveData(data);
+  alert("Journal sauvegardé");
+}
+
+function generateReport() {
+  const data = loadData();
+  const today = new Date();
+  const day = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+  const entries = Object.entries(data.journal).filter(([date, _]) => {
+    const d = new Date(date);
+    return d >= monday && d <= today;
+  });
+  const report = entries.map(([date, text]) => `📅 ${date} :\n${text}`).join("\n\n");
+  document.getElementById("weeklyReport").value = report;
+}
+
+window.onload = () => {
+  const data = loadData();
+  updateDashboard(data);
+  renderTasks(data);
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById("journalEntry").value = data.journal[today] || "";
+};
+</script>
+</body>
+</html>
